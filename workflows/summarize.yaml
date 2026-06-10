@@ -1,0 +1,13 @@
+name: summarize
+description: Read a file and summarize it locally.
+steps:
+  - id: read_input
+    type: read_file
+    config:
+      path: examples/input.txt
+      output_key: text
+  - id: summarize_text
+    type: summarize
+    config:
+      input_key: text
+      output_key: summary

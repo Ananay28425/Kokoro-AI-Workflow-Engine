@@ -1,0 +1,13 @@
+name: analyze_logs
+description: Minimal log analysis workflow using local summarization.
+steps:
+  - id: read_logs
+    type: read_file
+    config:
+      path: examples/logs.txt
+      output_key: text
+  - id: summarize_logs
+    type: summarize
+    config:
+      input_key: text
+      output_key: summary
