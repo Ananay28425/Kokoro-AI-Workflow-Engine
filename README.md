@@ -66,30 +66,27 @@ Workflows are declared as a sequential chain of steps in YAML format:
 
 ```yaml
 name: speak_summary
-description: "Reads a local file, summarizes it, and converts it to audio."
-inputs:
-  input_file: "examples/input.txt"
-  audio_output: "assets/audio/output.wav"
+description: Read, summarize, and synthesize speech locally.
 steps:
-  - id: file_content
+  - id: read_input
     type: read_file
     config:
-      path: "{input_file}"
-      output_key: "text"
+      path: examples/input.txt
+      output_key: text
 
-  - id: summary_text
+  - id: summarize_text
     type: summarize
     config:
-      input_key: "text"
-      output_key: "summary"
-      prompt: "Summarize this clearly in one sentence:\n\n{text}"
+      input_key: text
+      output_key: summary
 
-  - id: speech_result
+  - id: speak_summary
     type: speak
     config:
-      input_key: "summary"
-      output_path: "{audio_output}"
-      voice: "af_bella"
+      input_key: summary
+      output_key: audio_path
+      output_path: assets/audio/summary.wav
+      voice: af_heart
 ```
 
 ---
