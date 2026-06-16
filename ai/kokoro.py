@@ -23,21 +23,23 @@ class KokoroTTSAdapter:
         pipeline: Any | None = None,
         **kwargs: Any,
     ) -> None:
-        """Store Kokoro model settings without creating the pipeline yet."""
-
         self._model = model
         self._lang_code = lang_code
         self._sample_rate = sample_rate
         self._kwargs = kwargs
         self._pipeline: Any | None = pipeline
 
-    def synthesize(self, text: str, output_path: Path, *, voice: str | None = None) -> Path:
-        """Convert text into an audio file and return the saved path."""
-
+    def synthesize(
+        self, text: str, output_path: Path, *, voice: str | None = None
+    ) -> Path:
         if not text.strip():
             raise ValueError("text must not be empty")
         if output_path.exists() and output_path.is_dir():
-            raise ValueError(f"audio output path must be a file path, not a directory: {output_path}")
+            raise ValueError(
+                f"audio output path must be a file path, not a directory: {output_path}"
+            )
+
+        voice = voice or "af_heart"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         pipeline = self._get_pipeline()
 
@@ -50,14 +52,19 @@ class KokoroTTSAdapter:
             raise RuntimeError("unsupported Kokoro pipeline interface")
 
         if not output_path.exists():
-            raise RuntimeError(f"Kokoro did not create the expected audio file: {output_path}")
+            raise RuntimeError(
+                f"Kokoro did not create the expected audio file: {output_path}"
+            )
         return output_path
 
     def _write_audio_output(self, audio: Any, output_path: Path) -> None:
         """Write bytes or Kokoro audio chunks to the requested file path."""
 
         chunks = self._extract_audio_chunks(audio)
-        if all(isinstance(chunk, bytes | bytearray) for chunk in chunks):
+        if not chunks:
+            raise RuntimeError("Kokoro returned no audio data")
+
+        if all(isinstance(chunk, (bytes, bytearray)) for chunk in chunks):
             output_path.write_bytes(b"".join(bytes(chunk) for chunk in chunks))
             return
 
@@ -70,23 +77,90 @@ class KokoroTTSAdapter:
                 "to write the WAV file."
             ) from exc
 
-        audio_data = chunks[0] if len(chunks) == 1 else np.concatenate(chunks)
+        normalized: list[Any] = []
+        for chunk in chunks:
+            if isinstance(chunk, (bytes, bytearray)):
+                raise RuntimeError(
+                    "Kokoro returned mixed binary and numeric audio data"
+                )
+
+            try:
+                arr = np.asarray(chunk, dtype=np.float32)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Kokoro returned an unsupported audio chunk type: {type(chunk)!r}"
+                ) from exc
+
+            if arr.size == 0:
+                continue
+
+            normalized.append(arr.reshape(-1))
+
+        if not normalized:
+            raise RuntimeError("Kokoro returned no usable numeric audio data")
+
+        audio_data = (
+            normalized[0]
+            if len(normalized) == 1
+            else np.concatenate(normalized, axis=0)
+        )
         sf.write(str(output_path), audio_data, self._sample_rate)
 
     def _extract_audio_chunks(self, audio: Any) -> list[Any]:
         """Normalize Kokoro output into a list of audio chunks."""
 
-        if isinstance(audio, bytes | bytearray):
+        if isinstance(audio, (bytes, bytearray)):
             return [audio]
-        if isinstance(audio, Iterable) and not isinstance(audio, str | dict):
+
+        try:
+            import numpy as np
+
+            if isinstance(audio, np.ndarray):
+                return [audio]
+        except Exception:
+            pass
+
+        direct_audio = getattr(audio, "audio", None)
+        if direct_audio is not None:
+            return [direct_audio]
+
+        if isinstance(audio, tuple):
+            if len(audio) >= 3:
+                return [audio[2]]
+            return [audio]
+
+        if isinstance(audio, Iterable) and not isinstance(
+            audio, (str, bytes, bytearray, dict)
+        ):
             chunks: list[Any] = []
             for item in audio:
+                if isinstance(item, (bytes, bytearray)):
+                    chunks.append(item)
+                    continue
+
+                try:
+                    import numpy as np
+
+                    if isinstance(item, np.ndarray):
+                        chunks.append(item)
+                        continue
+                except Exception:
+                    pass
+
+                item_audio = getattr(item, "audio", None)
+                if item_audio is not None:
+                    chunks.append(item_audio)
+                    continue
+
                 if isinstance(item, tuple) and len(item) >= 3:
                     chunks.append(item[2])
-                else:
-                    chunks.append(item)
+                    continue
+
+                chunks.append(item)
+
             if chunks:
                 return chunks
+
         return [audio]
 
     def _get_pipeline(self) -> Any:
@@ -105,11 +179,15 @@ class KokoroTTSAdapter:
         pipeline_kwargs = {"lang_code": self._lang_code, **self._kwargs}
         if self._model is not None:
             pipeline_kwargs["model"] = self._model
+
         try:
             self._pipeline = KPipeline(**pipeline_kwargs)
         except TypeError as exc:
             if "model" not in pipeline_kwargs:
-                raise RuntimeError(f"could not initialize Kokoro pipeline: {exc}") from exc
+                raise RuntimeError(
+                    f"could not initialize Kokoro pipeline: {exc}"
+                ) from exc
             pipeline_kwargs.pop("model")
             self._pipeline = KPipeline(**pipeline_kwargs)
+
         return self._pipeline

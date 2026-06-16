@@ -6,14 +6,17 @@ steps:
     config:
       path: examples/input.txt
       output_key: text
+
   - id: summarize_text
     type: summarize
     config:
       input_key: text
       output_key: summary
+
   - id: speak_summary
     type: speak
     config:
       input_key: summary
       output_key: audio_path
       output_path: assets/audio/summary.wav
+      voice: af_heart

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "kokoro-ai-workflow-engine"
 version = "0.1.0"
 description = "Local workflow engine using llama.cpp, Kokoro, SQLite, Typer, and Rich."
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.7",
     "pyyaml>=6.0",
