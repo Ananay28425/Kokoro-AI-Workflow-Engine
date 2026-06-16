@@ -7,30 +7,32 @@ from typing import Any, Iterator
 
 import pytest
 
-from storage.database import PostgresDatabase
+from storage.database import SqliteDatabase
 from storage.hash_utils import stable_sha256
-from storage.repository import PostgresWorkflowRepository
+from storage.repository import SqliteWorkflowRepository
+
+
+class FakeCursor:
+    """Fake SQLite cursor returning mock lastrowid attribute."""
+
+    def __init__(self, lastrowid: int | None = 123) -> None:
+        self.lastrowid = lastrowid
 
 
 class FakeConnection:
-    """Fake PostgreSQL connection used to test repository SQL safely."""
+    """Fake SQLite connection used to test repository SQL safely."""
 
     def __init__(self) -> None:
         """Create storage for captured SQL statements and parameters."""
 
         self.calls: list[tuple[str, tuple[Any, ...] | None]] = []
-        self.row: tuple[int] | None = (123,)
+        self.row_id: int | None = 123
 
-    def execute(self, query: str, params: tuple[Any, ...] | None = None) -> "FakeConnection":
-        """Capture SQL and return self like psycopg cursor helpers do."""
+    def execute(self, query: str, params: tuple[Any, ...] | None = None) -> FakeCursor:
+        """Capture SQL and return a fake cursor with the configured row_id."""
 
         self.calls.append((query, params))
-        return self
-
-    def fetchone(self) -> tuple[int] | None:
-        """Return the configured fake database row."""
-
-        return self.row
+        return FakeCursor(self.row_id)
 
 
 class FakeDatabase:
@@ -43,7 +45,7 @@ class FakeDatabase:
 
     @contextmanager
     def connect(self) -> Iterator[FakeConnection]:
-        """Yield the fake connection like PostgresDatabase.connect."""
+        """Yield the fake connection like SqliteDatabase.connect."""
 
         yield self.connection
 
@@ -63,20 +65,23 @@ def test_stable_sha256_handles_large_input_quickly() -> None:
     assert len(digest) == 64
 
 
-def test_postgres_database_requires_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Check that missing database configuration fails before any DB call."""
+def test_sqlite_database_uses_env_or_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Check that SQLite database path resolves to environment variable or fallback."""
 
-    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("SQLITE_DATABASE_PATH", raising=False)
+    db = SqliteDatabase()
+    assert db._db_path == "workflows.db"
 
-    with pytest.raises(RuntimeError, match="DATABASE_URL"):
-        PostgresDatabase()
+    monkeypatch.setenv("SQLITE_DATABASE_PATH", "test.db")
+    db_env = SqliteDatabase()
+    assert db_env._db_path == "test.db"
 
 
 def test_repository_initialize_creates_table_and_index() -> None:
     """Check database initialization SQL includes table safety and an index."""
 
     database = FakeDatabase()
-    PostgresWorkflowRepository(database).initialize()
+    SqliteWorkflowRepository(database).initialize()
     sql = "\n".join(query for query, _ in database.connection.calls)
 
     assert "CREATE TABLE IF NOT EXISTS workflow_runs" in sql
@@ -88,7 +93,7 @@ def test_repository_save_run_serializes_json_and_returns_id() -> None:
     """Check save_run writes JSON safely and returns the inserted id."""
 
     database = FakeDatabase()
-    run_id = PostgresWorkflowRepository(database).save_run(
+    run_id = SqliteWorkflowRepository(database).save_run(
         workflow_name="workflow",
         status="succeeded",
         inputs={"path": Path("input.txt")},
@@ -110,7 +115,7 @@ def test_repository_rejects_invalid_status() -> None:
     database = FakeDatabase()
 
     with pytest.raises(ValueError, match="invalid workflow run status"):
-        PostgresWorkflowRepository(database).save_run(
+        SqliteWorkflowRepository(database).save_run(
             workflow_name="workflow",
             status="unknown",
             inputs={},
@@ -121,13 +126,13 @@ def test_repository_rejects_invalid_status() -> None:
 
 
 def test_repository_raises_when_insert_returns_no_row() -> None:
-    """Check save_run fails loudly if PostgreSQL does not return an id."""
+    """Check save_run fails loudly if SQLite does not return a row id."""
 
     database = FakeDatabase()
-    database.connection.row = None
+    database.connection.row_id = None
 
     with pytest.raises(RuntimeError, match="failed to persist"):
-        PostgresWorkflowRepository(database).save_run(
+        SqliteWorkflowRepository(database).save_run(
             workflow_name="workflow",
             status="failed",
             inputs={},

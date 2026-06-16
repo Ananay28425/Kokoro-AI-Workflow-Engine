@@ -1,39 +1,37 @@
-# Opens PostgreSQL connections for the storage layer.
+# Opens SQLite connections for the storage layer.
 from __future__ import annotations
 
 import os
+import sqlite3
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Iterator
 
 
-class PostgresDatabase:
-    """Small database connection wrapper for PostgreSQL.
+class SqliteDatabase:
+    """Small database connection wrapper for SQLite.
 
     storage.repository uses this class whenever it needs a database
-    connection. The DSN can be passed directly or read from DATABASE_URL.
+    connection. The database file path can be passed directly or read from
+    SQLITE_DATABASE_PATH.
     """
 
-    def __init__(self, dsn: str | None = None) -> None:
-        """Store the PostgreSQL connection string and fail early if missing."""
+    def __init__(self, db_path: str | None = None) -> None:
+        """Store the SQLite database file path, defaulting to workflows.db."""
 
-        self._dsn = dsn or os.getenv("DATABASE_URL")
-        if not self._dsn:
-            raise RuntimeError("DATABASE_URL must be set for PostgreSQL persistence")
+        self._db_path = db_path or os.getenv("SQLITE_DATABASE_PATH", "workflows.db")
 
     @contextmanager
-    def connect(self) -> Iterator[Any]:
-        """Open one PostgreSQL connection for a repository operation."""
+    def connect(self) -> Iterator[sqlite3.Connection]:
+        """Open one SQLite connection for a repository operation."""
 
         try:
-            import psycopg
-        except ImportError as exc:
-            raise RuntimeError(
-                "psycopg is required for PostgreSQL persistence. "
-                "Install the project dependencies or install psycopg[binary]."
-            ) from exc
-
-        try:
-            with psycopg.connect(self._dsn) as connection:
-                yield connection
-        except psycopg.Error as exc:
-            raise RuntimeError(f"PostgreSQL operation failed: {exc}") from exc
+            connection = sqlite3.connect(self._db_path)
+            # Enable WAL mode for better concurrency and foreign keys for safety
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("PRAGMA foreign_keys=ON")
+            yield connection
+            connection.commit()
+        except sqlite3.Error as exc:
+            raise RuntimeError(f"SQLite operation failed: {exc}") from exc
+        finally:
+            connection.close()

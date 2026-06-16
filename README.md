@@ -2,7 +2,7 @@
 
 A highly modular, local-first workflow execution engine built in Python. It loads workflows from simple YAML files, reads local files, summarizes their content using local LLMs (via `llama-cpp-python`), and converts the result to spoken audio with local TTS (via `kokoro`).
 
-The engine features strict Pydantic validation, interface-based design for offline testing, optional PostgreSQL run tracking, and a clean Command-Line Interface (CLI).
+The engine features strict Pydantic validation, interface-based design for offline testing, optional SQLite run tracking, and a clean Command-Line Interface (CLI).
 
 ---
 
@@ -21,7 +21,7 @@ flowchart LR
     Executor -->|Lazy Registry| Steps[Workflow Steps]
     Steps -->|Local LLM| Llama[LlamaCppAdapter]
     Steps -->|Local TTS| Kokoro[KokoroTTSAdapter]
-    Executor -.->|Optional Run Logs| DB[(PostgreSQL)]
+    Executor -.->|Optional Run Logs| DB[(SQLite)]
 ```
 
 ---
@@ -51,7 +51,7 @@ kokoro-ai-workflow-engine/
 │   ├── llama_cpp.py            # GGUF model adapter via llama-cpp-python
 │   └── kokoro.py               # Speech generation adapter via Kokoro-82M
 │
-├── storage/                    # PostgreSQL metadata persistence
+├── storage/                    # SQLite metadata persistence
 │   ├── database.py             # Connection context manager
 │   └── repository.py           # Database transaction queries
 │
@@ -126,7 +126,7 @@ Run a workflow and display the final state:
 python main.py run workflows/speak_summary.yaml
 ```
 
-Run a workflow and persist the execution metadata to PostgreSQL (requires `DATABASE_URL` env var):
+Run a workflow and persist the execution metadata to SQLite (requires `SQLITE_DATABASE_PATH` env var):
 
 ```bash
 python main.py run workflows/speak_summary.yaml --persist

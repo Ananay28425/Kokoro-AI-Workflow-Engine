@@ -10,8 +10,8 @@ from rich.table import Table
 from core.engine import load_workflow
 from core.executor import WorkflowExecutor
 from core.registry import build_default_registry
-from storage.database import PostgresDatabase
-from storage.repository import PostgresWorkflowRepository
+from storage.database import SqliteDatabase
+from storage.repository import SqliteWorkflowRepository
 
 app = typer.Typer(help="Local Jarvis workflow runner.")
 console = Console()
@@ -34,18 +34,23 @@ def validate(workflow: Path) -> None:
     except Exception as exc:
         _exit_with_error(exc)
     else:
-        console.print(f"[green]valid[/green] {definition.name} ({len(definition.steps)} steps)")
+        console.print(
+            f"[green]valid[/green] {definition.name} ({len(definition.steps)} steps)"
+        )
 
 
 @app.command()
-def run(workflow: Path, persist: bool = typer.Option(False, help="Persist run metadata to PostgreSQL.")) -> None:
+def run(
+    workflow: Path,
+    persist: bool = typer.Option(False, help="Persist run metadata to SQLite."),
+) -> None:
     """Run a workflow from YAML and print the final state in the terminal."""
 
     try:
         repository = None
         if persist:
-            # Persistence connects the CLI to storage.repository and PostgreSQL.
-            repository = PostgresWorkflowRepository(PostgresDatabase())
+            # Persistence connects the CLI to storage.repository and SQLite.
+            repository = SqliteWorkflowRepository(SqliteDatabase())
             repository.initialize()
 
         # The CLI connects YAML loading, step factories, execution, and output.

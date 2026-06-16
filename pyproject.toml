@@ -1,14 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "kokoro-ai-workflow-engine"
 version = "0.1.0"
-description = "Local Jarvis workflow engine using llama.cpp, Kokoro, PostgreSQL, Typer, and Rich."
+description = "Local workflow engine using llama.cpp, Kokoro, SQLite, Typer, and Rich."
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "typer>=0.12",
     "rich>=13.7",
-    "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +27,9 @@ local = [
 
 [project.scripts]
 jarvis = "cli.commands:app"
+
+[tool.setuptools]
+packages = { find = { include = ["ai", "cli", "core", "steps", "storage"] } }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,23 +1,22 @@
-# Persists workflow run records through PostgreSQL.
+# Persists workflow run records through SQLite.
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from storage.database import PostgresDatabase
-
+from storage.database import SqliteDatabase
 
 VALID_RUN_STATUSES = {"succeeded", "failed"}
 
 
-class PostgresWorkflowRepository:
+class SqliteWorkflowRepository:
     """Repository that saves workflow execution metadata.
 
     core.executor calls this class through the WorkflowRepository contract when
     CLI persistence is enabled.
     """
 
-    def __init__(self, database: PostgresDatabase) -> None:
+    def __init__(self, database: SqliteDatabase) -> None:
         """Receive the database connection wrapper used for all queries."""
 
         self._database = database
@@ -29,13 +28,13 @@ class PostgresWorkflowRepository:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS workflow_runs (
-                    id BIGSERIAL PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     workflow_name TEXT NOT NULL,
                     status TEXT NOT NULL CHECK (status IN ('succeeded', 'failed')),
-                    inputs JSONB NOT NULL,
-                    outputs JSONB NOT NULL,
+                    inputs TEXT NOT NULL,
+                    outputs TEXT NOT NULL,
                     error TEXT,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
@@ -59,13 +58,14 @@ class PostgresWorkflowRepository:
 
         if status not in VALID_RUN_STATUSES:
             allowed = ", ".join(sorted(VALID_RUN_STATUSES))
-            raise ValueError(f"invalid workflow run status '{status}'. Expected one of: {allowed}")
+            raise ValueError(
+                f"invalid workflow run status '{status}'. Expected one of: {allowed}"
+            )
         with self._database.connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO workflow_runs (workflow_name, status, inputs, outputs, error)
-                VALUES (%s, %s, %s::jsonb, %s::jsonb, %s)
-                RETURNING id
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     workflow_name,
@@ -74,7 +74,8 @@ class PostgresWorkflowRepository:
                     json.dumps(outputs, default=str),
                     error,
                 ),
-            ).fetchone()
-        if row is None:
+            )
+            row_id = cursor.lastrowid
+        if row_id is None:
             raise RuntimeError("failed to persist workflow run")
-        return int(row[0])
+        return int(row_id)
