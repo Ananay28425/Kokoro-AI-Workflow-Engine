@@ -10,7 +10,6 @@ The engine features strict Pydantic validation, interface-based design for offli
 
 The system is built to decouple execution logic from third-party runtimes:
 
-- **PEP 544 Protocols:** The core executor connects to steps, language models, and speech systems via interfaces defined in `core/interfaces.py`, making mocking instant.
 - **Lazy Loading:** Heavy libraries (`llama-cpp-python`, `kokoro`) and neural weights are only loaded if a step requires them. Commands like `validate` or `pytest` execute in milliseconds.
 - **Pydantic Type Safety:** Configurations are validated before runtime to prevent execution failure from simple configuration typos.
 
@@ -103,10 +102,20 @@ pip install -e ".[local]"
 
 ### 2. Local Model Configuration
 
-Point to a downloaded local GGUF model:
+Point to a downloaded local GGUF model. Supported examples:
+- Qwen3.5-2B-GGUF
+- Qwen2.5-3B-GGUF
+- Llama 3.2 3B-GGUF
+- Phi-4 Mini-GGUF
 
+Linux/macOS
 ```bash
 export LLAMA_CPP_MODEL_PATH="/path/to/models/your-model.gguf"
+```
+
+Windows PowerShell
+```powershell
+$env:LLAMA_CPP_MODEL_PATH="E:\Models\Qwen3.5-2B-Q4_K_M.gguf"
 ```
 
 ### 3. Usage
@@ -123,7 +132,11 @@ Run a workflow and display the final state:
 python main.py run workflows/speak_summary.yaml
 ```
 
-Run a workflow and persist the execution metadata to SQLite (requires `SQLITE_DATABASE_PATH` env var):
+Persistence is optional.
+If enabled, workflow execution metadata is stored in a local SQLite database.
+No external database server is mandatory.
+
+You can also run a workflow and persist the execution metadata to SQLite (requires `SQLITE_DATABASE_PATH` env var):
 
 ```bash
 python main.py run workflows/speak_summary.yaml --persist
@@ -139,3 +152,17 @@ Tests are entirely mocked, enabling rapid development without downloading model 
 # Run the complete test suite
 pytest
 ```
+
+
+## Learning Goals
+
+This project demonstrates:
+
+- Workflow orchestration
+- Local LLM inference via llama.cpp
+- Local TTS synthesis via Kokoro
+- YAML-driven execution pipelines
+- Interface-based architecture
+- Dependency inversion and lazy loading
+- Validation with Pydantic
+- Automated testing
