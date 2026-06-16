@@ -10,7 +10,6 @@ The engine features strict Pydantic validation, interface-based design for offli
 
 The system is built to decouple execution logic from third-party runtimes:
 
-- **PEP 544 Protocols:** The core executor connects to steps, language models, and speech systems via interfaces defined in `core/interfaces.py`, making mocking instant.
 - **Lazy Loading:** Heavy libraries (`llama-cpp-python`, `kokoro`) and neural weights are only loaded if a step requires them. Commands like `validate` or `pytest` execute in milliseconds.
 - **Pydantic Type Safety:** Configurations are validated before runtime to prevent execution failure from simple configuration typos.
 
